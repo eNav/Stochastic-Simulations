@@ -1,0 +1,362 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Apr 28 23:11:48 2020
+
+@author: stochasticity
+"""
+from pandas_datareader import data
+from pandas_ods_reader import read_ods
+from scipy.stats import norm
+import math
+from datetime import datetime
+import matplotlib.pyplot as plt 
+import pandas as pd
+
+
+
+
+"""
+In the first section of this program I am data wrangling in a very small scale. 
+The data that is being pulled from yahoo finance includes all type of data such as:
+High, Low, Open, Close, Volume and Adj Close. I am only interested in the Adjusted
+Closing stock prices. In addition, the data is daily, but I am not interested in 
+daily data. I am interested in weekly data. Finally the data does not include 
+option prices and I was interested in having a data frame that included weekly
+option prices.    
+"""
+#===================================================================================
+"""
+Data maybe assigned to a variable the following way: 
+    variable = data.Datareader("ticker of company", data_source = "favorite financial source"
+    start = "starting date - format - (YYYY-MM-DD)", end = "ending date - format - (YYYY-MM-DD)")
+    
+This will assign variable all High, Low, Open Close, Volume and Adj Close data as a dataframe. 
+What I did was variable['Adj Close']. This pulls only the adjusted close data, along with the dates.
+-------------------------------------------------------------------------------------
+Next I used resample. Resample reorganizes the data. I chose to reorganize the data in a weekly
+fashion where each week began on the day Friday. Next I used .last() to take the last value of each
+of each week. For example: 
+    variable.resample('W-FRI').last()
+    
+    Reorganizes the data assigned to variable. The 'W' orders it in a weekly fashion and 
+    '-FRI' has each week begin on a Friday. Finally .last() gives us the final values 
+    for each week. This is how I changed my data from daily to weekly. 
+-------------------------------------------------------------------------------------
+Options data was not fun to get. I had to manually input option data from thinkorswim
+into a ods file (the linux equivalent of a windows/mac excel file). The variable
+path is where the ods file is located in my computer. I created a variable that 
+would then read this file and turn it into a dataframe in python. Finally, I 
+added a column called stocks to the option dataframe, at the same time I added 
+the manipulated stock data. As an example: 
+    path = "location of option price data in my computer/name_of_file"
+    dataframe = read_ods(path, "sheet number or name in file")
+    The variable dataframe is now a dataframe. 
+    dataframe['stocks'] creates a new column in data frame called stocks. 
+    dataframe['stocks'] = variable.array adds the manipulated stock prices to
+    dataframe. 
+"""
+#TRIAL 1
+MS_p1 = data.DataReader("MS", data_source='yahoo', start='2020-1-17', end='2020-4-17')['Adj Close']
+MS1 = MS_p1.resample('W-FRI').last()
+path = "/home/stochasticity/Documents/MSC43_JAN1521.ods"
+df = read_ods(path, "Sheet1")
+df['stocks'] = MS1.array    
+
+pathp = "/home/stochasticity/Documents/MSP50_JAN1521.ods"
+dfp = read_ods(pathp, "Sheet1")
+dfp['stocks'] = MS1.array 
+#---------------------------------------------------------------------------------------------------
+morgan_adj = data.DataReader("MS", data_source='yahoo', start='2019-10-30', end='2020-1-30')['Adj Close']
+morgan_weekly = morgan_adj.resample('W-FRI').last()
+morganpath_sample2p = "/home/stochasticity/Documents/MSP40_JAN1521_SNOV0119.ods"
+morgan_sample2p = read_ods(morganpath_sample2p, "Sheet1")
+morgan_sample2p['stocks'] = morgan_weekly.array 
+
+
+
+#TRIAL 2
+DB_p1 = data.DataReader("DB", data_source='yahoo', start='2020-1-17', end='2020-4-17')['Adj Close']
+DB1 = DB_p1.resample('W-FRI').last()
+path1 = "/home/stochasticity/Documents/DBC5_JAN1521.ods"
+df1 = read_ods(path1, "Sheet1")
+df1['stocks'] = DB1.array
+
+path1p = "/home/stochasticity/Documents/DBP8_JAN1521.ods"
+df1p = read_ods(path1p, "Sheet1")
+df1p['stocks'] = DB1.array
+#----------------------------------------------------------------------------------------------------
+
+"""
+This next section is where my actual program begins. Implied Volatilities are 
+forward looking. They can be used as estimates to predict future volatilities 
+for assets that have options. They are also used to calculate option prices, for 
+example: An option with a higher implied volatility has a larger standard deviation
+so the probable range it may cover within some time interval is great, which in return
+makes the option expensive. In addition, option traders may also demonstrate interest
+implied volatilites. The reason does not change, an option trader may be interested
+in an option that has great fluctuation, a purchase of the correct option on an asset 
+that covers a larger range of probable prices may see profit. It is because of these
+reasons that I decided to make this program into a class. I wanted the liberty of 
+using the data as an object. The automation of tasks is generalized and can be 
+easily implemented on a large scale with more dedication. I will point out benefits
+as we go through the code.  
+"""
+
+"""
+The program begins with a class called optionsman. Optionsman allows us 
+to make several of different function calls: The parameters are as following: 
+    name = optionsman("The name of the company (string)", 
+    "data frame with dates, prices of options and prices of stocks", 
+    "The strike price of the option(integer)", "Put or Call option (string)", 
+    "The date the option expires (String YYYY-MM-DD)")
+    
+    Every self.variable is a shortcut to calling different parts of the 
+    new object. For example: name.dataframe would print out the dataframe of name
+    or name.strike would give us the strike price of the object name. 
+"""
+
+"""
+The first real function is duration_agg. The sole purpose of this function 
+is to help us calculate a precise time until expiration. In the black-scholes
+equation we have a variable T, which denotes the amount of time until the 
+option expires. For example, suppose a 1 year until exipratoin and suppose
+I am running weekly stock/option prices. The very first price is, 1 year away
+or 52/52 weeks away, however the following week, it is not 52 weeks away it is 
+51 weeks away, therefore T would now become 51/52 since there is only 51 weeks
+until it expires. 
+    duration_agg grabs the date of the object name and uses the datetime.strptime
+    function to find the difference between the date of the option/stock price
+    and the date until expiration. It then creates a column called duration
+    and inserts it into name.dataframe. In other words, duration_agg calculates
+    time until maturity. 
+"""
+
+"""
+bisect_method_c is probably the most important function of the program. It can
+take two different paths, the first path was added to graph the price of a call 
+or put as a function of volatility. It allows us to input an interval of volatilities
+we would like to begin our search in. Where a is the lower bound and b is the upper
+bound. Furthermore, keep tells the program to store all the values which are being
+plugged in. For example: 
+    Suppose I give it an a value of 0.0001 and b value of 1000 and keep = True
+    the bisec_method_c will begin its iteration and store all the prices of the call
+    or put at those values(this was necessary to produce the graph that allowed
+    me to plot the values of a put or call at extreme values). The reason 
+    I had to do it like this is because that wasn't that feature wasn't a part
+    of my initial program. 
+    
+In other words, the true function of bisect_method_c was to find the solution 
+for volatility given a interval (0.01,1). In other words, initially I wasnt
+saving any of 'guessed' volatilities, I was only interested in saving the 
+volatility value that had a difference from the true value of the option price
+less than 0.001. The way that the bisect_method_c works is similar to the actual
+bisection method of numerical methods. The program starts at an interval, 
+the next guessed value is going to be c=(a+b)/2. I then use that c to find
+what option price would be given if that was the guess, if that c volatility
+value gives me a value greater than the option price we know that b is too large
+so we make b = c which makes the interval smaller. Similarly if the option price at 
+c is less than the true value then a  is too small and a becomes c and so on until 
+we have a small enough interval where the true value lies. We then save that value. 
+"""
+"""
+black_scholes is literally the black scholes equation written in code. 
+according to an input of put or call the corresponding equation is then 
+computed. In this function I also had to make some additions to demonstrate
+that my black_scholes equation was calculating puts and calls accurately. In other
+words, origninally black_scholes and bisec_method_c had to work together to 
+calculate the approximated volatility, so I didn't really have access to it 
+because I was initially interested in only the implied volatility,however 
+I enabled the ability to access it and be able to plug in values to calculate
+the price of a put or call or a single example, rather than n examples. 
+"""
+"""
+The function loop may be thought of as the architect of the program. It 
+basically tells bisect_method_c to run for each value in the dataframe name, 
+and it creates lists of the values for volatility, as well as the number of steps
+bisiect_method_c took to converge to the answer and adds them to the dataframe. 
+
+The next three functions are plot functions that allow us to plot things like
+the implied volatility, the stock prices vs option price vs implied volatility
+vs the vix and the addition of the option prices as vol goes to infinity and 0. 
+"""
+
+class optionsman: 
+    def __init__(self, company_name, dataframe, strike, optiontype, exp):
+        self.dataframe = dataframe 
+        self.options = dataframe["options"] 
+        self.stocks = dataframe["stocks"]
+        self.date = dataframe["date"]
+        self.optiontype = optiontype
+        self.exp = exp
+        self.strike = strike
+        self.name = company_name
+        self.vol_df = pd.DataFrame(columns=['option', 'sigma'])
+  
+    def duration_agg(self):
+        list_exp = []
+        for value in range(len(self.dataframe)):
+            start_date = str(self.date[value])
+            end_date = str(self.exp)
+            start = datetime.strptime(start_date, '%Y-%m-%d')
+            end = datetime.strptime(end_date, '%Y-%m-%d')
+            duration = end-start 
+            list_exp.append(duration.days/7)
+        self.dataframe.insert(2, "duration", list_exp)
+        return(self.dataframe)
+        
+#----------------------------------------------------------------------------------------------------------
+        # Code Above is working well!
+        
+    def bisec_method_c(self, option, istock, d, keep, a, b):
+        optiontype = self.optiontype
+        i = 0
+        Statement = True
+        if (a or b) == None or (a and b) == None:
+            a = 0.01
+            b = 1
+        if keep == True:
+            save = True
+            a = a
+            b = b
+            sig_values = []
+            op_prices = []
+            sig_values.append(a)
+            sig_values.append(b)
+            op_prices.append(self.black_scholes(a, istock, d, optiontype, None, None, None))
+            op_prices.append(self.black_scholes(b, istock, d, optiontype, None, None, None))
+        else:
+            save = False         
+        while Statement:
+            i = i+1
+            c = (a+b)/2
+            tester = self.black_scholes(c, istock, d, optiontype, None, None, None)
+            if save == True:
+                sig_values.append(c)
+                op_prices.append(tester)
+            if tester > option:
+                b = c
+            else:
+                a = c
+            if i>100 or (abs(option-self.black_scholes(c, istock, d, optiontype, None, None, None))<0.001):
+                Statement = False
+        templist = []
+        templist.append(c)
+        templist.append(i)
+        if save == True:
+            self.vol_df['sigma'] = sig_values
+            self.vol_df['option'] = op_prices
+        return(templist)
+
+
+    def black_scholes(self, guess, price, time_to_maturity, optiontype, rf, Strike, continuous_div):
+        if optiontype == None:
+            optiontype = self.optiontype
+        else:
+            optiontype = optiontype
+        if time_to_maturity < 1 or time_to_maturity == 1:
+            T = time_to_maturity
+        else:
+            T = time_to_maturity/52
+        if rf == None:
+            rf = 0.015
+        else:
+            rf = rf
+        if Strike == None:
+            Strike = self.strike
+        else:
+            Strike = Strike
+        if continuous_div == None:
+            continuous_div = 0
+        else:
+            continuous_div = continuous_div
+        So = price*math.exp(-continuous_div*time_to_maturity)
+        d1t = math.log(So/Strike)+(rf+guess*guess/2)*T
+        d1b = guess*math.sqrt(T)
+        d1 = d1t/d1b
+        d2 = d1 - guess*math.sqrt(T)
+        if optiontype == "call":
+            value = So*norm.cdf(d1) - Strike*math.exp(-rf*T)*norm.cdf(d2)
+        else:
+            value = Strike*math.exp(-rf*T)*norm.cdf(-d2)-So*norm.cdf(-d1)
+        return(value)
+    
+    def loop(self):
+        self.duration_agg()
+        temp = []
+        steps = []
+        for value in range(len(self.dataframe)):
+            temp.append(self.bisec_method_c(self.dataframe['options'][value],
+                                            self.dataframe['stocks'][value],
+                                            self.dataframe['duration'][value],
+                                            keep = False, a = None, b = None)[0])   
+            steps.append(self.bisec_method_c(self.dataframe['options'][value],
+                                             self.dataframe['stocks'][value],
+                                             self.dataframe['duration'][value],
+                                             keep = False, a = None, b= None)[1])
+        self.dataframe.insert(4, "sig_hat", temp)
+        self.dataframe.insert(5, "steps", steps)  
+
+    def vol_plot(self):
+        trim = self.dataframe[['date','sig_hat']]
+        timeseriesdf = trim.set_index('date')
+        fig, ax = plt.subplots(figsize = (12,10))
+        ax.plot(timeseriesdf, marker = 'o', linestyle = '--')
+        ax.set_ylabel('Implied Volatility')
+        ax.set_title(str(self.name)+' : Implied Volatility')
+        ax.set_xlabel('Date')
+        ax.legend(["Sigma"])
+        fig.autofmt_xdate()
+    
+    def subs_4(self):
+        fig, axs = plt.subplots(2,2, figsize = (12,10), sharex = True)
+        fig.suptitle(str(self.name)+' Subplots (USD)')
+        axs[0,0].plot(self.dataframe['date'], self.dataframe['stocks'], marker = 'o', linestyle = '--', color = 'red')
+        axs[0,0].set_title('Stock Price')
+        axs[0,0].grid(True)
+        axs[0,1].plot(self.dataframe['date'], self.dataframe['options'], marker = 's', linestyle = '--', color = 'm')
+        axs[0,1].set_title(str(self.optiontype).capitalize()+' Price @ K = '+str(self.strike))
+        axs[0,1].grid(True)
+        axs[1,0].plot(self.dataframe['date'], self.dataframe['sig_hat'], marker = 'o', linestyle = '--')
+        axs[1,0].set_title('Implied Vol.')
+        axs[1,0].grid(True)
+        
+        Vix = data.DataReader("^VIX", data_source='yahoo', start= str(self.dataframe['date'][0]), 
+                              end=str(self.dataframe['date'][len(self.dataframe)-1]))['Adj Close'].resample('W-FRI').last()
+        axs[1,1].plot(Vix.values, marker = 'o', linestyle = '--', color = 'c')
+        axs[1,1].set_title('VIX')
+        axs[1,1].grid(True)
+      
+        fig.autofmt_xdate()
+    
+    def vol_lim_plot(self):
+        ordered = self.vol_df.sort_values(by=['sigma'])
+        fig, ay = plt.subplots(figsize = (12,10))
+        ay.plot(ordered['sigma'], ordered['option'], marker = 'o', linestyle = '--')
+        ymax = max(ordered['option'])
+        ymin = min(ordered['option'])
+        ay.annotate('Max Price = '+str(ymax), xy=(ordered['sigma'].max(), ordered['option'].max()),
+                    arrowprops = dict(facecolor='black', shrink = 0.5))
+        ay.annotate('Min Price = '+str(ymin), xy=(ordered['sigma'].min(), ordered['option'].min()),
+                    arrowprops = dict(facecolor='black', shrink = 0.25))
+        ay.set_ylabel(str(self.optiontype).capitalize()+' Price (USD)')
+        ay.set_xlabel('Volatility')
+        ay.set_title(str(self.name).capitalize()+" "+str(self.optiontype).capitalize()
+                     +" Prices for K = "+str(self.strike)+" at Different Volatilities")        
+    
+    def fancy_table(self):
+        
+        mod_table = self.dataframe.rename(columns={'options':str(self.optiontype).capitalize()+' K='+
+                                                   str(self.strike), 'stocks':str(self.name).capitalize(),
+                                                   'sig_hat':'Implied Vol.'})
+        return(mod_table.style.background_gradient(cmap='Blues'))   
+    
+    
+msc1 = optionsman("Morgan Stanley", df, 43, "call", "2021-01-15")
+msp1 = optionsman("Morgan Stanley", dfp, 50, "put", "2021-01-15")
+
+msp2 = optionsman("Morgan Stanley", morgan_sample2p, 40, "put", "2021-01-15")
+
+
+dbc1 = optionsman('Deutsche Bank', df1, 5, 'call', '2021-01-15')
+dbp1 = optionsman('Deutsche Bank', df1p, 8, 'put', '2021-01-15')
