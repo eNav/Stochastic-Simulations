@@ -300,7 +300,44 @@ class optionsman:
         mod_table = self.dataframe.rename(columns={'options':str(self.optiontype).capitalize()+' K='+
                                                    str(self.strike), 'stocks':str(self.name).capitalize(),
                                                    'sig_hat':'Implied Vol.'})
-        return(mod_table.style.background_gradient(cmap='Blues'))   
+        return(mod_table.style.background_gradient(cmap='Blues'))
+    
+    
+    def duration(rate, startdate, enddate):
+        if rate == "daily":
+            start1 = startdate
+            end1 = enddate
+            s = datetime.strptime(start1, '%Y-%m-%d')
+            d = datetime.strptime(end1, '%Y-%m-%d')
+            a = d-s
+            print(a.days)
+        if rate == "weekly":
+            start1 = startdate
+            end1 = enddate
+            s = datetime.strptime(start1, '%Y-%m-%d')
+            d = datetime.strptime(end1, '%Y-%m-%d')
+            a = d-s
+            c = a.days
+            h = c/7
+            print(h)        
+        if rate == "monthly":
+            start1 = startdate
+            end1 = enddate
+            s = datetime.strptime(start1, '%Y-%m-%d')
+            d = datetime.strptime(end1, '%Y-%m-%d')
+            a = d-s
+            c = a.days
+            v = c/30
+            print(v)
+        if rate == "quarterly":
+            start1 = startdate
+            end1 = enddate
+            s = datetime.strptime(start1, '%Y-%m-%d')
+            d = datetime.strptime(end1, '%Y-%m-%d')
+            a = d-s
+            c = a.days
+            v = c/90
+            print(v)
     
     
 msc1 = optionsman("Morgan Stanley", df, 43, "call", "2021-01-15")
