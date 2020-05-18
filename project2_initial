@@ -208,64 +208,32 @@ class optionsman:
 #----------------------------------------------------------------------------------------------------------
         # Code Above is working well!
         
-    def bisec_method_c(self, option, istock, d, keep, a, b):
-        optiontype = self.optiontype
+    def bisec_method_c(self, option, istock, d):
         i = 0
         Statement = True
-        if (a or b) == None or (a and b) == None:
-            a = 0.01
-            b = 1
-        if keep == True:
-            save = True
-            a = a
-            b = b
-            sig_values = []
-            op_prices = []
-            sig_values.append(a)
-            sig_values.append(b)
-            op_prices.append(self.black_scholes(a, istock, d, optiontype, None, None, None))
-            op_prices.append(self.black_scholes(b, istock, d, optiontype, None, None, None))
-        else:
-            save = False         
+        a = 0.01
+        b = 1
         while Statement:
             i = i+1
             c = (a+b)/2
-            tester = self.black_scholes(c, istock, d, optiontype, None, None, None)
-            if save == True:
-                sig_values.append(c)
-                op_prices.append(tester)
+            tester = self.black_scholes(c, istock, d, None)
             if tester > option:
                 b = c
             else:
                 a = c
-            if i>100 or (abs(option-self.black_scholes(c, istock, d, optiontype, None, None, None))<0.001):
+            if i>100 or (abs(option-self.black_scholes(c, istock, d, None))<0.001):
                 Statement = False
         templist = []
         templist.append(c)
         templist.append(i)
-        if save == True:
-            self.vol_df['sigma'] = sig_values
-            self.vol_df['option'] = op_prices
         return(templist)
 
 
-    def black_scholes(self, guess, price, time_to_maturity, optiontype, rf, Strike, continuous_div):
-        if optiontype == None:
-            optiontype = self.optiontype
-        else:
-            optiontype = optiontype
-        if time_to_maturity < 1 or time_to_maturity == 1:
-            T = time_to_maturity
-        else:
-            T = time_to_maturity/52
-        if rf == None:
-            rf = 0.015
-        else:
-            rf = rf
-        if Strike == None:
-            Strike = self.strike
-        else:
-            Strike = Strike
+    def black_scholes(self, guess, price, time_to_maturity, continuous_div):
+        optiontype = self.optiontype
+        T = time_to_maturity/52
+        rf = 0.015
+        Strike = self.strike
         if continuous_div == None:
             continuous_div = 0
         else:
@@ -288,12 +256,10 @@ class optionsman:
         for value in range(len(self.dataframe)):
             temp.append(self.bisec_method_c(self.dataframe['options'][value],
                                             self.dataframe['stocks'][value],
-                                            self.dataframe['duration'][value],
-                                            keep = False, a = None, b = None)[0])   
+                                            self.dataframe['duration'][value])[0])   
             steps.append(self.bisec_method_c(self.dataframe['options'][value],
                                              self.dataframe['stocks'][value],
-                                             self.dataframe['duration'][value],
-                                             keep = False, a = None, b= None)[1])
+                                             self.dataframe['duration'][value])[1])
         self.dataframe.insert(4, "sig_hat", temp)
         self.dataframe.insert(5, "steps", steps)  
 
@@ -328,22 +294,7 @@ class optionsman:
         axs[1,1].grid(True)
       
         fig.autofmt_xdate()
-    
-    def vol_lim_plot(self):
-        ordered = self.vol_df.sort_values(by=['sigma'])
-        fig, ay = plt.subplots(figsize = (12,10))
-        ay.plot(ordered['sigma'], ordered['option'], marker = 'o', linestyle = '--')
-        ymax = max(ordered['option'])
-        ymin = min(ordered['option'])
-        ay.annotate('Max Price = '+str(ymax), xy=(ordered['sigma'].max(), ordered['option'].max()),
-                    arrowprops = dict(facecolor='black', shrink = 0.5))
-        ay.annotate('Min Price = '+str(ymin), xy=(ordered['sigma'].min(), ordered['option'].min()),
-                    arrowprops = dict(facecolor='black', shrink = 0.25))
-        ay.set_ylabel(str(self.optiontype).capitalize()+' Price (USD)')
-        ay.set_xlabel('Volatility')
-        ay.set_title(str(self.name).capitalize()+" "+str(self.optiontype).capitalize()
-                     +" Prices for K = "+str(self.strike)+" at Different Volatilities")        
-    
+        
     def fancy_table(self):
         
         mod_table = self.dataframe.rename(columns={'options':str(self.optiontype).capitalize()+' K='+
